@@ -1,8 +1,10 @@
 import streamlit as st
 from auth import authenticate_user, logout_user
-from database import get_user_type, create_tables
+from database import  create_tables,get_user_details
 from dashboards import superadmin_dashboard, branchadmin_dashboard, teacher_dashboard
 import manage_students,manage_branches,manage_subjects,manage_grades
+from visualizations import fetch_data
+from streamlit_tags import st_tags
 
 st.set_page_config(layout="wide")
 
@@ -14,11 +16,11 @@ def main():
       st.session_state.user = None
 
   if st.session_state.user:
-      if st.session_state.user['userType'] == "superadmin":
+      if st.session_state.userDetails['userType'] == "superadmin":
         with st.sidebar:
           menu_options = ["Super Admin Dashboard","Branch Admin Dashboard", "Manage Branches", "Teacher Dashboard","Manage Subjects","Manage Students", "Logout"]
           menu_selection = st.radio("Menu", menu_options)
-
+          display_filters()
         if menu_selection == "Super Admin Dashboard":
             superadmin_dashboard.render_dashboard()
         elif menu_selection == "Branch Admin Dashboard":
@@ -33,7 +35,7 @@ def main():
           manage_students.render_page()
         elif menu_selection == "Logout":
             logout_user()
-      elif st.session_state.user['userType'] == "branchadmin":
+      elif st.session_state.userDetails['userType'] == "branchadmin":
         with st.sidebar:
           menu_options = ["Branch Admin Dashboard", "Manage Branches" ,"Teacher Dashboard","Manage Subjects","Manage Students", "Logout"]
           menu_selection = st.radio("Menu", menu_options)
@@ -50,9 +52,10 @@ def main():
           manage_students.render_page()
         elif menu_selection == "Logout":
             logout_user()
-      elif st.session_state.user['userType'] == "teacher":
+      elif st.session_state.userDetails['userType'] == "teacher":
         with st.sidebar:
-            st.write(st.session_state.user['additonal_details'])
+            st.write("Welcome Teacher:",st.session_state.userDetails['username'])
+            st.write(st.session_state.userDetails['additional_details'])            
             menu_options = ["Teacher Dashboard", "Manage Students","Manage Grades","Logout"]
             menu_selection = st.radio("Menu", menu_options)
         if menu_selection == "Dashboard":
@@ -72,13 +75,54 @@ def main():
       if st.button("Login"):
           user = authenticate_user(username, password, remember_me)
           if user:
-              user_type = get_user_type(username)
+              user_details=get_user_details(username)
               st.session_state.user = user
-              st.session_state.user['userType'] = user_type # Store user type in session
-              st.success(f"Logged in as {user_type}")
+              st.session_state.userDetails = user_details # Store user details
+              #st.session_state.addDetails = add_details # Store additional details in session
+              st.success(f"Logged in as {st.session_state.userDetails['userType']}")
               st.rerun()
           else:
               st.error("Login Failed")
+
+def display_filters():
+    # Fetch Branches Data
+    branches = fetch_data("SELECT id, name FROM Branches")
+    if branches:
+        branch_names = {branch[0]: branch[1] for branch in branches}
+        selected_branch_ids = st.multiselect(
+            "Select Branch",
+            list(branch_names.keys()),
+            format_func=lambda x: branch_names[x],
+            key="branch_select"
+        )
+        st.session_state.selected_branch_ids = selected_branch_ids
+    else:
+         st.write("No branches available")
+    # Fetch Subjects Data
+    subjects = fetch_data("SELECT id, name FROM Subjects")
+    if subjects:
+       subject_names = {subject[0]: subject[1] for subject in subjects}
+       selected_subject_ids = st.multiselect(
+            "Select Subjects",
+            list(subject_names.keys()),
+             format_func=lambda x: subject_names[x],
+             key="subject_select",
+        )
+       st.session_state.selected_subject_ids = selected_subject_ids
+    else:
+      st.write("No Subjects available")
+    # Fetch Grades (from Classes table)
+    grades = fetch_data("SELECT DISTINCT name FROM Classes")
+    if grades:
+      all_grades = [grade[0] for grade in grades]
+      selected_grades = st.multiselect(
+        "Select Grades",
+        all_grades,
+        key="grade_select"
+    )
+      st.session_state.selected_grades = selected_grades
+    else:
+       st.write("No grades available")
 
 if __name__ == "__main__":
     main()

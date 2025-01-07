@@ -1,36 +1,44 @@
 import streamlit as st
-from database import get_connection
+from database import get_connection,get_user_details
 from datetime import date
 
 def fetch_data(query, params=None):
     conn = get_connection()
     cursor = conn.cursor()
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-    results = cursor.fetchall()
-    conn.close()
+    results = []
+    try:
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        results = cursor.fetchall()
+    except Exception as e:
+         st.error(f"Database Error: {e}")
+    finally:
+        conn.close()
     return results
 
 
 def add_student():
     st.subheader("Add New Student")
     name = st.text_input("Student Name")
-    dob = st.date_input("Date of Birth", value = date.today())
+    roll_no=st.text_input("Roll No")
+    gender = st.radio("Select Gender", ["male", "female"])
     guardian_contact = st.text_input("Guardian Contact")
     enrollment_date = st.date_input("Enrollment Date", value=date.today())
+    address = st.text_input("Address")
 
-    branches = fetch_data("SELECT id,name FROM Branches")
-    branch_names = {branch[0]:branch[1] for branch in branches}
-    selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x])
+    # branches = fetch_data("SELECT id,name FROM Branches")
+    # branch_names = {branch[0]:branch[1] for branch in branches}
+    selected_branch_id=st.session_state.userDetails['branch_id']
+    #selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x], key="branch_select")
     classes = fetch_data("SELECT id,name FROM Classes WHERE branch_id = ?", (selected_branch_id,))
     class_names = {class_item[0]:class_item[1] for class_item in classes}
 
-    selected_class_id = st.selectbox("Select Class",list(class_names.keys()) if classes else [], format_func=lambda x: class_names[x] if classes else "")
+    selected_class_id = st.selectbox("Select Class",list(class_names.keys()) if classes else [], format_func=lambda x: class_names[x] if classes else "",key="class_select")
     sections = fetch_data("SELECT id, name FROM Sections WHERE class_id=?", (selected_class_id,)) if classes else None
     section_names = {section[0]:section[1] for section in sections} if sections else {}
-    selected_section_id = st.selectbox("Select Section", list(section_names.keys()) if sections else [], format_func= lambda x: section_names[x] if sections else "") if sections else None
+    selected_section_id = st.selectbox("Select Section", list(section_names.keys()) if sections else [], format_func= lambda x: section_names[x] if sections else "", key="section_select") if sections else None
 
 
     if st.button("Add Student"):
@@ -38,8 +46,8 @@ def add_student():
         cursor = conn.cursor()
         try:
 
-          cursor.execute("INSERT INTO Students (name, dob, guardian_contact, enrollment_date, section_id) VALUES (?, ?, ?, ?, ?)",
-                       (name, dob, guardian_contact, enrollment_date, selected_section_id)
+          cursor.execute("INSERT INTO Students (name, roll_no, gender, guardian_contact, enrollment_date, address, section_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (name, roll_no, gender, guardian_contact, enrollment_date, address, selected_section_id)
                        )
           conn.commit()
           st.success("Student Added Successfully!")
@@ -54,12 +62,18 @@ def add_student():
 
 def edit_student(student_id):
   st.subheader("Edit Student")
-  student = fetch_data("SELECT * FROM Students WHERE id = ?", (student_id,))[0]
+  student = fetch_data("SELECT * FROM Students WHERE id = ?", (student_id,))
+  if not student:
+        st.error("Student not found!")
+        return
+  student = student[0]
 
   name = st.text_input("Student Name", value=student[1])
-  dob = st.date_input("Date of Birth", value=student[2])
-  guardian_contact = st.text_input("Guardian Contact", value=student[3])
-  enrollment_date = st.date_input("Enrollment Date", value=student[4])
+  roll_no = st.text_input("Roll No", value=student[2])
+  gender = st.text_input("Gender", value=student[3])
+  guardian_contact = st.text_input("Guardian Contact", value=student[4])
+  enrollment_date = st.date_input("Enrollment Date", value=student[5])
+  address = st.text_input("Address", value=student[6])
 
 
   branches = fetch_data("SELECT id,name FROM Branches")
@@ -78,22 +92,25 @@ def edit_student(student_id):
     JOIN Classes c ON b.id = c.branch_id
     JOIN Sections s ON c.id = s.class_id
     JOIN Students st ON s.id = st.section_id
-    WHERE st.id = ?""",(student_id,))[0][0]
-
-    selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x], index = list(branch_names.keys()).index(selected_branch_id))
+    WHERE st.id = ?""",(student_id,))
+    if selected_branch_id:
+      selected_branch_id = selected_branch_id[0][0]
+      selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x], index = list(branch_names.keys()).index(selected_branch_id),key="selected_branch")
+    else:
+         selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x],key="selected_branch")
     class_names = {class_item[0]:class_item[1] for class_item in classes}
-    selected_class_id = st.selectbox("Select Class",list(class_names.keys()) , format_func=lambda x: class_names[x] ,index = list(class_names.keys()).index(classes[0][0]))
+    selected_class_id = st.selectbox("Select Class",list(class_names.keys()) , format_func=lambda x: class_names[x] ,index = list(class_names.keys()).index(classes[0][0]),key="selected_class")
     sections = fetch_data("SELECT id, name FROM Sections WHERE class_id=?", (selected_class_id,)) 
     section_names = {section[0]:section[1] for section in sections} if sections else {}
-    selected_section_id = st.selectbox("Select Section", list(section_names.keys()) if sections else [], format_func= lambda x: section_names[x] if sections else "", index= list(section_names.keys()).index(fetch_data("SELECT section_id FROM Students WHERE id=?", (student_id,))[0][0]) if fetch_data("SELECT section_id FROM Students WHERE id=?", (student_id,)) else 0) if sections else None
+    selected_section_id = st.selectbox("Select Section", list(section_names.keys()) if sections else [], format_func= lambda x: section_names[x] if sections else "", index= list(section_names.keys()).index(fetch_data("SELECT section_id FROM Students WHERE id=?", (student_id,))[0][0]) if fetch_data("SELECT section_id FROM Students WHERE id=?", (student_id,)) else 0,key="selected_section") if sections else None
 
 
     if st.button("Update Student"):
       conn = get_connection()
       cursor = conn.cursor()
       try:
-          cursor.execute("UPDATE Students SET name=?, dob=?, guardian_contact=?, enrollment_date=?, section_id=? WHERE id=?",
-                         (name, dob, guardian_contact, enrollment_date, selected_section_id, student_id))
+          cursor.execute("UPDATE Students SET name=?, roll_no=?, gender=?, guardian_contact=?, enrollment_date=?, address=?, section_id=? WHERE id=?",
+                         (name, roll_no, gender, guardian_contact, enrollment_date, address, selected_section_id, student_id))
           conn.commit()
           st.success("Student Updated Successfully!")
       except Exception as e:
@@ -123,9 +140,11 @@ def fetch_students(selected_branch_id = None, selected_class_id = None, selected
         SELECT
             st.id,
             st.name,
-            st.dob,
+            st.roll_no,
+            st.gender,
             st.guardian_contact,
-            st.enrollment_date
+            st.enrollment_date,
+            st.address
         FROM
             Students st
         JOIN
@@ -154,56 +173,72 @@ def fetch_students(selected_branch_id = None, selected_class_id = None, selected
 
 def render_page():
     st.title("Manage Students")
-
-    branches = fetch_data("SELECT id,name FROM Branches")
-    branch_names = {branch[0]:branch[1] for branch in branches}
-    selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x])
-
+    branch_name = fetch_data("SELECT name FROM Branches WHERE id=?", (st.session_state.userDetails['branch_id'],))
+    if branch_name:
+        st.subheader(f"Branch Name: {branch_name}")
+    else:
+        st.subheader("Branch Name: Not Found") 
+    # branches = fetch_data("SELECT id,name FROM Branches")
+    # branch_names = {branch[0]:branch[1] for branch in branches}
+    # selected_branch_id = st.selectbox("Select Branch", list(branch_names.keys()), format_func=lambda x: branch_names[x],key="selected_branch1")
+    selected_branch_id=st.session_state.userDetails['branch_id']
     classes = fetch_data("SELECT id,name FROM Classes WHERE branch_id = ?", (selected_branch_id,))
     class_names = {class_item[0]:class_item[1] for class_item in classes}
 
-    selected_class_id = st.selectbox("Select Class",list(class_names.keys()) if classes else [], format_func=lambda x: class_names[x] if classes else "")
+    selected_class_id = st.selectbox("Select Class",list(class_names.keys()) if classes else [], format_func=lambda x: class_names[x] if classes else "",key="selected_class1")
 
     sections = fetch_data("SELECT id, name FROM Sections WHERE class_id=?", (selected_class_id,)) if classes else None
     section_names = {section[0]:section[1] for section in sections} if sections else {}
-    selected_section_id = st.selectbox("Select Section", list(section_names.keys()) if sections else [], format_func= lambda x: section_names[x] if sections else "") if sections else None
+    selected_section_id = st.selectbox("Select Section", list(section_names.keys()) if sections else [], format_func= lambda x: section_names[x] if sections else "",key="selected_section1") if sections else None
 
 
     students = fetch_students(selected_branch_id, selected_class_id, selected_section_id)
 
 
     if students:
-        col1, col2, col3, col4, col5, col6 = st.columns([1, 2, 2, 2,1, 1])
+        col1, col2, col3, col4, col5, col6, col7,col8, col9 = st.columns([1, 2, 1, 1, 2, 2, 1, 1, 1])
         with col1:
            st.write("**Student ID**")
         with col2:
             st.write("**Student Name**")
         with col3:
-           st.write("**Date of Birth**")
+           st.write("**Roll No**")
         with col4:
-            st.write("**Guardian Contact**")
+            st.write("**Gender**")
         with col5:
-             st.write("**Edit**")
+             st.write("**Guardian_Contact**")
         with col6:
+             st.write("**Enrollment Date**")
+        with col7:
+             st.write("**Address**")
+        with col8:
+             st.write("**Edit**")
+        with col9:
              st.write("**Delete**")
 
         for student in students:
-            col1, col2, col3, col4, col5, col6 = st.columns([1, 2, 2, 2,1, 1])
+            col1, col2, col3, col4, col5, col6 ,col7,col8,col9= st.columns([1, 2, 1,1,2, 2,1, 1,1])
             with col1:
                 st.write(student[0])  # Student ID
             with col2:
                 st.write(student[1])  # Student Name
             with col3:
-                st.write(student[2])  # Date of Birth
+                st.write(student[2])
             with col4:
-                st.write(student[3])  # Guardian Contact
+                st.write(student[3]) 
             with col5:
+                st.write(student[4]) 
+            with col6:
+                st.write(student[5]) 
+            with col7:
+                st.write(student[6]) 
+            with col8:
                  if st.button("✏️", key=f"edit_{student[0]}"):
                     st.session_state.show_edit_form = True
                     st.session_state.student_code = student[0]
                     st.session_state.show_add_form = False
                     st.rerun()
-            with col6:
+            with col9:
                 if st.button("🗑️", key=f"delete_{student[0]}"):
                     delete_student(student[0])
 
