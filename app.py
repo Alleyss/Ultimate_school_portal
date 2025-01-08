@@ -18,12 +18,16 @@ def main():
   if st.session_state.user:
       if st.session_state.userDetails['userType'] == "superadmin":
         with st.sidebar:
-          menu_options = ["Super Admin Dashboard","Branch Admin Dashboard", "Manage Branches", "Teacher Dashboard","Manage Subjects","Manage Students", "Logout"]
+          menu_options = ["Super Admin Dashboard","Branch Admin Dashboard", "Manage Branches", "Teacher Dashboard","Manage Subjects", "Logout"]
           menu_selection = st.radio("Menu", menu_options)
-          display_filters()
+          
         if menu_selection == "Super Admin Dashboard":
+            with st.sidebar:
+               display_filters()
             superadmin_dashboard.render_dashboard()
         elif menu_selection == "Branch Admin Dashboard":
+            with st.sidebar:
+               display_filters()
             branchadmin_dashboard.render_dashboard()
         elif menu_selection == "Manage Branches":
           manage_branches.render_page()
@@ -31,25 +35,19 @@ def main():
           teacher_dashboard.render_dashboard()
         elif menu_selection == "Manage Subjects":
           manage_subjects.render_page()
-        elif menu_selection == "Manage Students":
-          manage_students.render_page()
         elif menu_selection == "Logout":
             logout_user()
       elif st.session_state.userDetails['userType'] == "branchadmin":
         with st.sidebar:
-          menu_options = ["Branch Admin Dashboard", "Manage Branches" ,"Teacher Dashboard","Manage Subjects","Manage Students", "Logout"]
+          menu_options = ["Branch Admin Dashboard" ,"Manage Subjects", "Logout"]
           menu_selection = st.radio("Menu", menu_options)
 
         if menu_selection == "Branch Admin Dashboard":
+          with st.sidebar:
+             display_filters2()
           branchadmin_dashboard.render_dashboard()
-        elif menu_selection == "Manage Branches":
-          manage_branches.render_page()
-        elif menu_selection == "Teacher Dashboard":
-          teacher_dashboard.render_dashboard()
         elif menu_selection == "Manage Subjects":
           manage_subjects.render_page()
-        elif menu_selection == "Manage Students":
-          manage_students.render_page()
         elif menu_selection == "Logout":
             logout_user()
       elif st.session_state.userDetails['userType'] == "teacher":
@@ -58,7 +56,7 @@ def main():
             st.write(st.session_state.userDetails['additional_details'])            
             menu_options = ["Teacher Dashboard", "Manage Students","Manage Grades","Logout"]
             menu_selection = st.radio("Menu", menu_options)
-        if menu_selection == "Dashboard":
+        if menu_selection == "Teacher Dashboard":
           teacher_dashboard.render_dashboard()
         elif menu_selection == "Manage Students":
           manage_students.render_page()
@@ -112,17 +110,23 @@ def display_filters():
     else:
       st.write("No Subjects available")
     # Fetch Grades (from Classes table)
-    grades = fetch_data("SELECT DISTINCT name FROM Classes")
-    if grades:
-      all_grades = [grade[0] for grade in grades]
-      selected_grades = st.multiselect(
-        "Select Grades",
-        all_grades,
-        key="grade_select"
-    )
-      st.session_state.selected_grades = selected_grades
+
+def display_filters2():
+    # Fetch Subjects Data
+    subjects = fetch_data("SELECT id, name FROM Subjects")
+    if subjects:
+       subject_names = {subject[0]: subject[1] for subject in subjects}
+       selected_subject_ids = st.multiselect(
+            "Select Subjects",
+            list(subject_names.keys()),
+             format_func=lambda x: subject_names[x],
+             key="subject_select",
+        )
+       st.session_state.selected_subject_ids = selected_subject_ids
     else:
-       st.write("No grades available")
+      st.write("No Subjects available")
+    # Fetch Grades (from Classes table)
+   
 
 if __name__ == "__main__":
     main()

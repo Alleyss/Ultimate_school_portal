@@ -160,7 +160,9 @@ def render_dashboard():
          student_distribution_by_branch()
         #4. Cards with specific data of the selected branch
          st.subheader("Branch Specific Data")
-         display_branch_cards(branch_id)
+         for branch in st.session_state.selected_branch_ids:
+            st.write("Branch ID: ",branch)
+            display_branch_cards(branch)
 
          # 5. Subject wise teacher distribution
          st.subheader("Subject Wise Teacher Distribution")
@@ -172,15 +174,14 @@ def render_dashboard():
          #Subject id selection for other visualizations
          subjects = fetch_data("SELECT id, name FROM Subjects")
          if subjects:
-           subject_names = {subject[0]: subject[1] for subject in subjects}
-           selected_subject_id = st.selectbox("Select Subject", list(subject_names.keys()), format_func=lambda x: subject_names[x])
            #3. Performance Analysis based on selected subject
-           st.subheader("Performance Analysis Based on Selected Subject")
-           performance_analysis_by_subject(selected_subject_id)
+           for sub in st.session_state.selected_subject_ids:
+            st.subheader("Performance Analysis Based on Selected Subject")
+            performance_analysis_by_subject(sub)
 
             #7. Subject wise structure Analysis
-           st.subheader("Subject Wise Structure Analysis")
-           subject_wise_structure_analysis(selected_subject_id)
+            st.subheader("Subject Wise Structure Analysis")
+            subject_wise_structure_analysis(sub)
 
 
          else:
@@ -198,7 +199,8 @@ def render_dashboard():
           selected_student_id = st.selectbox("Select Student", list(student_names.keys()),format_func = lambda x: student_names[x])
           selected_class_id = st.selectbox("Select Class",list(class_names.keys()), format_func = lambda x: class_names[x])
           selected_section_id = st.selectbox("Select Section", list(section_names.keys()),format_func = lambda x: section_names[x])
-          evaluation_visualizations_per_student(selected_student_id, selected_subject_id, selected_class_id, selected_section_id)
+          for sub in st.session_state.selected_subject_ids:
+            evaluation_visualizations_per_student(selected_student_id, sub, selected_class_id, selected_section_id)
 
          else:
              st.write("No Students, Sections or Classes to show visualizations")

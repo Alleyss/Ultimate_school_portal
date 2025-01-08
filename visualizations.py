@@ -316,79 +316,276 @@ def evaluation_visualizations_per_student(student_id, subject_id, class_id, sect
     else:
         st.write("No Evaluation data available")
 
-# Dummy data for visualizations (To be replaced with actual database data in production)
+
+def get_overview_data(cursor, teacher_username):
+    """Retrieves overview data for the teacher's subject."""
+    query = """
+    SELECT
+        COUNT(DISTINCT s.id) AS total_students,
+        COUNT(DISTINCT t.id) AS total_topics,
+        sub.name AS subject_name
+    FROM
+        Subjects sub
+    JOIN
+        Classes c ON sub.class_id = c.id
+    JOIN
+       Sections sec ON c.id = sec.class_id
+    JOIN
+        Students s ON sec.id=s.section_id
+    JOIN
+        Chapters ch ON sub.id = ch.subject_id
+    JOIN
+        Topics t ON ch.id = t.chapter_id
+    JOIN Users u ON sub.teacher_id = u.id
+    WHERE u.username = ? and u.userType = 'teacher'
+    """
+    cursor.execute(query, (teacher_username,))
+    results = cursor.fetchone()
+    return results if results else (0, 0, "No Subject Assigned")
 
 
-# Main function to run the dashboard
-def render_dashboard():
-    st.title("School Dashboard")
-    # Retrieve the branch_id from session state
-    if 'userDetails' in st.session_state and 'branch_id' in st.session_state.userDetails:
-         branch_id = st.session_state.userDetails['branch_id']
-         #1. Display Table
-         st.subheader("Branch Statistics")
-         display_branch_stats()
+def display_overview(cursor, teacher_username):
+     """Displays the overview cards."""
+     total_students, total_topics, subject_name = get_overview_data(cursor, teacher_username)
 
-         #2. Display Student Distribution Based on Branch
-         st.subheader("Student Distribution by Branch")
-         student_distribution_by_branch()
+     st.subheader("Subject Overview")
+     col1, col2, col3 = st.columns(3)
+     with col1:
+         st.metric("Subject Name", subject_name)
+     with col2:
+         st.metric("Total Students", total_students)
+     with col3:
+         st.metric("Total Topics", total_topics)
 
-         #4. Cards with specific data of the selected branch
-         st.subheader("Branch Specific Data")
-         display_branch_cards(branch_id)
+import plotly.express as px
 
-         # 5. Subject wise teacher distribution
-         st.subheader("Subject Wise Teacher Distribution")
-         subject_wise_teacher_distribution()
-
-         #6. Class wise statistics
-         st.subheader("Class Wise Statistics")
-         class_wise_statistics()
-
-         #Subject id selection for other visualizations
-         subjects = fetch_data("SELECT id, name FROM Subjects")
-         if subjects:
-           subject_names = {subject[0]: subject[1] for subject in subjects}
-           selected_subject_id = st.selectbox("Select Subject", list(subject_names.keys()), format_func=lambda x: subject_names[x])
-           #3. Performance Analysis based on selected subject
-           st.subheader("Performance Analysis Based on Selected Subject")
-           performance_analysis_by_subject(selected_subject_id)
-
-            #7. Subject wise structure Analysis
-           st.subheader("Subject Wise Structure Analysis")
-           subject_wise_structure_analysis(selected_subject_id)
-
-
-         else:
-            st.write("No Subject available to visualize")
-
-         #8. Evaluation Visualizations
-         st.subheader("Evaluation Visualizations per Student")
-         students = fetch_data("SELECT id,name from Students")
-         classes = fetch_data("SELECT id, name FROM Classes")
-         sections = fetch_data("SELECT id, name from Sections")
-         if students and classes and sections:
-          student_names = {student[0]:student[1] for student in students}
-          class_names = {class_item[0]:class_item[1] for class_item in classes}
-          section_names = {section[0]:section[1] for section in sections}
-          selected_student_id = st.selectbox("Select Student", list(student_names.keys()),format_func = lambda x: student_names[x])
-          selected_class_id = st.selectbox("Select Class",list(class_names.keys()), format_func = lambda x: class_names[x])
-          selected_section_id = st.selectbox("Select Section", list(section_names.keys()),format_func = lambda x: section_names[x])
-          evaluation_visualizations_per_student(selected_student_id, selected_subject_id, selected_class_id, selected_section_id)
-
-         else:
-             st.write("No Students, Sections or Classes to show visualizations")
+def get_completion_pie_data(cursor, teacher_username):
+     """Retrieves data for the completion pie chart."""
+     query = """
+         SELECT
+         e.completed,
+         COUNT(e.id) AS count
+     FROM
+         Evaluations e
+     JOIN
+         Topics t ON e.topic_id = t.id
+     JOIN
+         Chapters ch ON t.chapter_id = ch.id
+     JOIN
+         Subjects sub ON ch.subject_id = sub.id
+     JOIN Users u ON sub.teacher_id = u.id
+     WHERE u.username = ? AND u.userType = 'teacher'
+     GROUP BY
+         e.completed;
+     """
+     cursor.execute(query, (teacher_username,))
+     results = cursor.fetchall()
+     if results:
+        df = pd.DataFrame(results, columns=["completed", "count"])
+        return df
+     else:
+        return pd.DataFrame({'completed': [], 'count': []})
 
 
+def display_completion_pie_chart(cursor,teacher_username):
+     """Displays the completion pie chart."""
+     df = get_completion_pie_data(cursor, teacher_username)
+     if not df.empty:
+         fig = px.pie(df, values='count', names='completed', title='Completion Status')
+         st.plotly_chart(fig)
+     else:
+         st.write("No Evaluation data found for the subject")
 
+import plotly.express as px
+
+def get_chapter_histogram_data(cursor, teacher_username):
+    """Retrieves data for the chapter histogram."""
+    query = """
+    SELECT
+        ch.name as chapter_name,
+        e.completed,
+        COUNT(e.id) AS count
+    FROM
+        Evaluations e
+    JOIN
+        Topics t ON e.topic_id = t.id
+    JOIN
+        Chapters ch ON t.chapter_id = ch.id
+    JOIN
+        Subjects sub ON ch.subject_id = sub.id
+    JOIN Users u ON sub.teacher_id = u.id
+    WHERE u.username = ? AND u.userType = 'teacher'
+    GROUP BY
+        ch.name, e.completed
+    """
+    cursor.execute(query, (teacher_username,))
+    results = cursor.fetchall()
+    if results:
+       df = pd.DataFrame(results, columns=["chapter_name", "completed", "count"])
+       return df
     else:
-        st.write("User details or branch ID not available in session state. Please login.")
+        return pd.DataFrame({'chapter_name': [], 'completed': [], 'count': []})
 
-if __name__ == '__main__':
-    #Use the following to test without a real database
-    dummy_data = generate_dummy_data()
-    st.session_state.dummy_data = dummy_data
-    st.session_state.userDetails = {
-       "branch_id": 1
-    }
-    render_dashboard()
+def display_chapter_histogram(cursor, teacher_username):
+    """Displays the chapter histogram."""
+    df = get_chapter_histogram_data(cursor, teacher_username)
+    if not df.empty:
+        fig = px.histogram(df, x="chapter_name", y="count", color="completed",
+                           title='Chapter Wise Completion Count',
+                           barmode = 'group')
+        st.plotly_chart(fig)
+    else:
+       st.write("No evaluation data to display for Chapter histogram")
+
+import plotly.express as px
+
+def get_student_histogram_data(cursor, teacher_username):
+    """Retrieves data for the student-wise histogram."""
+    query = """
+    SELECT
+        s.name as student_name,
+        e.completed,
+        COUNT(e.id) AS count
+    FROM
+        Evaluations e
+    JOIN
+        Students s ON e.student_id = s.id
+    JOIN
+        Topics t ON e.topic_id = t.id
+    JOIN
+        Chapters ch ON t.chapter_id = ch.id
+    JOIN
+        Subjects sub ON ch.subject_id = sub.id
+    JOIN Users u ON sub.teacher_id = u.id
+        WHERE u.username = ? AND u.userType = 'teacher'
+    GROUP BY
+        s.name, e.completed
+    """
+    cursor.execute(query, (teacher_username,))
+    results = cursor.fetchall()
+    if results:
+        df = pd.DataFrame(results, columns=['student_name', 'completed', 'count'])
+        return df
+    else:
+        return pd.DataFrame({'student_name': [], 'completed': [], 'count': []})
+
+def display_student_histogram(cursor, teacher_username):
+    """Displays the student-wise histogram."""
+    df = get_student_histogram_data(cursor, teacher_username)
+    if not df.empty:
+        fig = px.histogram(df, x="student_name", y="count", color="completed",
+                           title='Student Wise Completion Count',
+                           barmode = 'group')
+        st.plotly_chart(fig)
+    else:
+        st.write("No data to display for student Histogram")
+
+import plotly.graph_objects as go
+
+
+def get_student_performance_data(cursor, teacher_username, student_id):
+     """Retrieves data for student performance tracking."""
+     query = """
+     SELECT
+         ch.name as chapter_name,
+         COUNT(CASE WHEN e.completed = 'YES' THEN 1 END) AS completed_count,
+          COUNT(e.id) AS total_count
+     FROM
+         Evaluations e
+     JOIN
+         Topics t ON e.topic_id = t.id
+     JOIN
+         Chapters ch ON t.chapter_id = ch.id
+      JOIN
+          Subjects sub ON ch.subject_id = sub.id
+     JOIN Users u ON sub.teacher_id = u.id
+     WHERE u.username = ? AND u.userType = 'teacher' AND e.student_id = ?
+     GROUP BY ch.name
+     """
+     cursor.execute(query, (teacher_username, student_id))
+     results = cursor.fetchall()
+     if results:
+         df = pd.DataFrame(results, columns=["chapter_name", "completed_count", "total_count"])
+         return df
+     else:
+         return pd.DataFrame({'chapter_name': [], 'completed_count': [], 'total_count': []})
+
+def display_student_performance_graph(cursor, teacher_username):
+     """Displays the student performance tracking graph."""
+
+     # Get list of students for the selectbox
+     query = """
+     SELECT DISTINCT(s.id), s.name
+     FROM Students s
+     JOIN Sections sec ON s.section_id = sec.id
+     JOIN Classes c ON sec.class_id = c.id
+     JOIN Subjects sub ON c.id = sub.class_id
+     JOIN Users u ON sub.teacher_id = u.id
+     WHERE u.username = ? AND u.userType = 'teacher'
+     """
+     cursor.execute(query, (teacher_username,))
+     student_options = cursor.fetchall()
+
+     if not student_options:
+         st.warning("No Students Assigned for the Teacher")
+         return
+     student_names = [item[1] for item in student_options]
+     student_ids = [item[0] for item in student_options]
+     student_id_name_dict = dict(zip(student_names, student_ids))
+     selected_student = st.selectbox("Select Student", student_names)
+     student_id = student_id_name_dict[selected_student]
+
+     if selected_student:
+         df = get_student_performance_data(cursor, teacher_username, student_id)
+         if not df.empty:
+             fig = go.Figure()
+             fig.add_trace(go.Scatter(x=df['chapter_name'],
+                         y=df['completed_count']/df['total_count'],
+                         mode='lines+markers',
+                         name='Completion Rate'))
+             fig.update_layout(
+                     title='Student Performance by Chapter',
+                     xaxis_title='Chapter',
+                     yaxis_title='Completed Rate (completed_count / total_count)',
+                     yaxis_range=[0,1]
+                 )
+             st.plotly_chart(fig)
+         else:
+           st.write("No Performance data for this student")
+
+def get_chapter_wise_counts_data(cursor, teacher_username):
+    """Retrieves chapter-wise completion counts for the table."""
+    query = """
+    SELECT
+        ch.name as chapter_name,
+        e.completed,
+        COUNT(e.id) AS count
+    FROM
+        Evaluations e
+    JOIN
+        Topics t ON e.topic_id = t.id
+    JOIN
+        Chapters ch ON t.chapter_id = ch.id
+    JOIN
+        Subjects sub ON ch.subject_id = sub.id
+    JOIN Users u ON sub.teacher_id = u.id
+    WHERE u.username = ? AND u.userType = 'teacher'
+    GROUP BY
+        ch.name, e.completed
+    """
+    cursor.execute(query, (teacher_username,))
+    results = cursor.fetchall()
+    if results:
+        df = pd.DataFrame(results, columns=["chapter_name", "completed", "count"])
+        return df
+    else:
+        return pd.DataFrame({'chapter_name': [], 'completed': [], 'count': []})
+
+def display_chapter_wise_table(cursor, teacher_username):
+    """Displays chapter-wise counts in a Pandas DataFrame table."""
+    df = get_chapter_wise_counts_data(cursor, teacher_username)
+    if not df.empty:
+        df_pivot = df.pivot_table(index='chapter_name', columns='completed', values='count', fill_value=0)
+        st.dataframe(df_pivot)
+    else:
+      st.write("No evaluation data for chapter wise table")
