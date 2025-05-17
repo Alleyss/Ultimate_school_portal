@@ -2,7 +2,7 @@ import streamlit as st
 from auth import authenticate_user, logout_user
 from database import  create_tables,get_user_details
 from dashboards import superadmin_dashboard, branchadmin_dashboard, teacher_dashboard
-import manage_students,manage_branches,manage_subjects,manage_grades
+import manage_students,manage_branches,manage_subjects,manage_grades,manage_teachers
 from visualizations import fetch_data
 from streamlit_tags import st_tags
 
@@ -18,28 +18,22 @@ def main():
   if st.session_state.user:
       if st.session_state.userDetails['userType'] == "superadmin":
         with st.sidebar:
-          menu_options = ["Super Admin Dashboard","Branch Admin Dashboard", "Manage Branches", "Teacher Dashboard","Manage Subjects", "Logout"]
+          menu_options = ["Super Admin Dashboard", "Manage Branches","Manage Subjects", "Logout"]
           menu_selection = st.radio("Menu", menu_options)
           
         if menu_selection == "Super Admin Dashboard":
             with st.sidebar:
                display_filters()
             superadmin_dashboard.render_dashboard()
-        elif menu_selection == "Branch Admin Dashboard":
-            with st.sidebar:
-               display_filters()
-            branchadmin_dashboard.render_dashboard()
         elif menu_selection == "Manage Branches":
           manage_branches.render_page()
-        elif menu_selection == "Teacher Dashboard":
-          teacher_dashboard.render_dashboard()
         elif menu_selection == "Manage Subjects":
           manage_subjects.render_page()
         elif menu_selection == "Logout":
             logout_user()
       elif st.session_state.userDetails['userType'] == "branchadmin":
         with st.sidebar:
-          menu_options = ["Branch Admin Dashboard" ,"Manage Subjects", "Logout"]
+          menu_options = ["Branch Admin Dashboard" ,"Manage Subjects","Manage Teachers", "Logout"]
           menu_selection = st.radio("Menu", menu_options)
 
         if menu_selection == "Branch Admin Dashboard":
@@ -48,6 +42,8 @@ def main():
           branchadmin_dashboard.render_dashboard()
         elif menu_selection == "Manage Subjects":
           manage_subjects.render_page()
+        elif menu_selection == "Manage Teachers":
+           manage_teachers.render_page()
         elif menu_selection == "Logout":
             logout_user()
       elif st.session_state.userDetails['userType'] == "teacher":

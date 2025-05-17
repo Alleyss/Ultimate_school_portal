@@ -211,3 +211,114 @@ def update_evaluations(student_id=None, topic_id=None):
                 connection.commit()
     except Exception as e:
         print(f"Error creating initial evaluations: {e}")
+
+def auto_insert_evaluations(class_name, section_name, teacher_id, db):
+    """
+    Automatically insert evaluation records for all students in a class/section
+    for all topics in the teacher's assigned subject.
+    
+    Args:
+        class_name (str): Name of the class
+        section_name (str): Name of the section
+        teacher_id (int): ID of the teacher from session
+        db: Database connection object
+    """
+    try:
+        cursor = db.cursor()
+        
+        # Get teacher's assigned subject and corresponding class
+        cursor.execute("""
+            SELECT id, class_id 
+            FROM Subjects 
+            WHERE teacher_id = ?
+        """, (teacher_id,))
+        subject_data = cursor.fetchone()
+        
+        if not subject_data:
+            raise Exception("No subject assigned to teacher")
+            
+        subject_id, class_id = subject_data
+        
+        # Verify the class and get section ID
+        cursor.execute("""
+            SELECT s.id 
+            FROM Sections s
+            JOIN Classes c ON s.class_id = c.id
+            WHERE c.id = ? AND s.name = ?
+        """, (class_id, section_name))
+        section_id = cursor.fetchone()
+        
+        if not section_id:
+            raise Exception("Invalid class or section")
+            
+        section_id = section_id[0]
+        
+        # Get all students in the specified section
+        cursor.execute("""
+            SELECT id 
+            FROM Students 
+            WHERE section_id = ?
+        """, (section_id,))
+        student_ids = [row[0] for row in cursor.fetchall()]
+        
+        if not student_ids:
+            raise Exception("No students found in specified section")
+            
+        # Get all topics from all chapters in the subject
+        cursor.execute("""
+            SELECT t.id 
+            FROM Topics t
+            JOIN Chapters c ON t.chapter_id = c.id
+            WHERE c.subject_id = ?
+        """, (subject_id,))
+        topic_ids = [row[0] for row in cursor.fetchall()]
+        
+        if not topic_ids:
+            raise Exception("No topics found for the subject")
+            
+        # Insert evaluations for each student-topic pair
+        evaluation_records = []
+        for student_id in student_ids:
+            for topic_id in topic_ids:
+                evaluation_records.append((student_id, topic_id, 'NO'))
+        
+        # Check for existing evaluations to avoid duplicates
+        existing_pairs_query = """
+            SELECT student_id, topic_id 
+            FROM Evaluations 
+            WHERE student_id IN ({}) AND topic_id IN ({})
+        """.format(
+            ','.join('?' * len(student_ids)), 
+            ','.join('?' * len(topic_ids))
+        )
+        cursor.execute(existing_pairs_query, student_ids + topic_ids)
+        existing_pairs = set((row[0], row[1]) for row in cursor.fetchall())
+        
+        # Filter out existing records
+        evaluation_records = [
+            record for record in evaluation_records 
+            if (record[0], record[1]) not in existing_pairs
+        ]
+        
+        # Perform batch insert
+        if evaluation_records:
+            cursor.executemany("""
+                INSERT INTO Evaluations (student_id, topic_id, completed) 
+                VALUES (?, ?, ?)
+            """, evaluation_records)
+            
+        db.commit()
+        
+        return {
+            'status': 'success',
+            'inserted_count': len(evaluation_records),
+            'total_students': len(student_ids),
+            'total_topics': len(topic_ids)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        return {
+            'status': 'error',
+            'message': str(e)
+        }

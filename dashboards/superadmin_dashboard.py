@@ -15,12 +15,12 @@ def fetch_data(query, params=None):
     conn.close()
     return results
 
-def create_user():
+def create_user(grp):
     st.subheader("Create New User")
     username = st.text_input("Username")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
-    userType = st.selectbox("User Type", ["superadmin", "branchadmin", "teacher"])
+    userType = st.selectbox("User Type", grp)
     branches=fetch_data('SELECT id,name FROM Branches')
     if branches:
         # Extract branch names for display in the selectbox
@@ -33,7 +33,7 @@ def create_user():
         st.error("No branches available. Please add branches first.")
         branch_id = None
     additional_details = st.text_area("Additional Details", value="")
-
+    
     if st.button("Create User"):
         conn = get_connection()
         cursor = conn.cursor()
@@ -53,12 +53,12 @@ def create_user():
             conn.close()
 
 
-def update_user():
+def update_user(grp,user_ids):
     st.subheader("Update User")
-    user_id_update = st.text_input("User ID to Update")
+    user_id_update = st.selectbox("User ID",[i[0] for i in user_ids])
     new_email = st.text_input("New Email", value="")
     new_password = st.text_input("New Password (Leave blank to keep same)", type="password", value="")
-    new_user_type = st.selectbox("New User Type", ["superadmin", "branchadmin", "teacher"], index=0)
+    new_user_type = st.selectbox("New User Type", grp, index=0)
     new_branch_id = st.text_input("New Branch ID (Leave blank to keep same)", value="")
     new_additional_details = st.text_area("New Additional Details (Leave blank to keep same)", value="")
 
@@ -99,7 +99,8 @@ def delete_user():
 
 def render_dashboard():
     st.title("Super Admin Dashboard")
-
+    grp=['superadmin','branchadmin','teacher']
+    user_ids=fetch_data("SELECT id FROM users")
     # Fetch Data
     num_students = fetch_data("SELECT COUNT(*) FROM Students")[0][0]
     num_teachers = fetch_data("SELECT COUNT(*) FROM Users WHERE userType = 'teacher'")[0][0]
@@ -224,7 +225,7 @@ def render_dashboard():
 
 
     if selected_operation == "Create User":
-        create_user()
+        create_user(grp)
     elif selected_operation == "See All Users":
        all_users = fetch_data("SELECT * FROM Users")
        st.subheader("All Users")
@@ -234,6 +235,6 @@ def render_dashboard():
        else:
            st.write("No User Found!")
     elif selected_operation == "Update User":
-       update_user()
+       update_user(grp)
     elif selected_operation == "Delete User":
         delete_user()
